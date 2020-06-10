@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Watcher</title>
+    <style>
+      body {
+        background-color: #ff0945;
+        margin-top: 15px;
+      }
+      video {
+        background: black;
+        border: 1px solid gray;
+      }
+      #container {
+        position: relative;
+        display: block;
+        margin: 0 auto;
+        width: 500px;
+        height: 500px;
+      }
+      #selfVideo {
+        width: 150px;
+        height: 150px;
+        position: absolute;
+        top: 15px;
+        right: 15px;
+      }
+      #streamerVideo {
+        width: 650px;
+        height: 650px;
+      }
+    </style>
+  </head>
+  <body>
+    <p id="statusText">Nothing</p>
+    <button id="acceptCall" disabled>Accept Start</button>
+    <button id="endCall">End Connection</button>
+    <div class="container">
+      <video id="selfVideo" autoplay></video>
+      <video id="streamerVideo" autoplay></video>
+    </div>
+    <p id="showError"></p>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="watcher.js"></script>
+  </body>
+</html>
