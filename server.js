@@ -3,53 +3,56 @@ const express = require("express");
 const fs = require("fs");
 
 const app = express();
+
+//HTTPS :
+// const https = require("https");
+// const key = fs.readFileSync("./key.pem");
+// const cert = fs.readFileSync("./cert.pem");
+// const server = https.createServer({ key: key, cert: cert }, app);
+
+//HTTP :
 const http = require("http");
 const server = http.createServer(app);
 
 const IO = socketIO(server);
 const port = process.env.PORT || 8080;
 
-app.use(express.static(__dirname + "/build"));
-app.get("/", (req, res, next) => {
-  res.sendFile(__dirname + "/build/index.html");
-});
-
-// keep a reference of all socket connections
-let connectedPeers = new Map();
 IO.sockets.on("error", (e) => console.log(e));
 IO.on("connection", (socket) => {
-  console.log(`a user with id: ${socket.id} joined!`);
-  socket.emit("connection-success", { success: socket.id });
+  let broadcaster;
+  console.log(` ** A user with id: ${socket.id} joined! ** `);
+  socket.on("requestCall", function (id) {
+    console.log(` user with id: ${id} made a call request!!!`);
+    socket.broadcast.emit("requestCall", socket.id);
+  });
 
-  connectedPeers.set(socket.id, socket);
-
+  socket.on("accpetCall", function (id) {
+    console.log(`call request accpeted by: ${socket.id}`);
+    socket.to(id).emit("accpetCall", socket.id);
+  });
+  socket.on("offer", (id, desc) => {
+    console.log("offer", desc);
+    socket.to(id).emit("offer", socket.id, desc);
+  });
+  socket.on("answer", (id, message) => {
+    socket.to(id).emit("answer", socket.id, message);
+  });
+  socket.on("candidate", (id, message) => {
+    socket.to(id).emit("candidate", socket.id, message);
+  });
   socket.on("disconnect", () => {
-    console.log(`a user with id: ${socket.id} disconnected!`);
-    connectedPeers.delete(socket.id);
-  });
-
-  socket.on("offerOrAnswer", (data) => {
-    // send to the other peer(s) if any
-    for (const [socketID, socket] of connectedPeers.entries()) {
-      // don't send to self
-      if (socketID !== data.socketID) {
-        console.log(socketID, data.payload.type);
-        socket.emit("offerOrAnswer", data.payload);
-      }
-    }
-  });
-
-  socket.on("candidate", (data) => {
-    // send candidate to the other peer(s) if any
-    for (const [socketID, socket] of connectedPeers.entries()) {
-      // don't send to self
-      if (socketID !== data.socketID) {
-        console.log(socketID, data.payload);
-        socket.emit("candidate", data.payload);
-      }
-    }
+    console.log(` xx A user with id: ${socket.id} Left! xx `);
+    socket.to(broadcaster).emit("disconnectPeer", socket.id);
   });
 });
+
+app.use(express.static(__dirname + "/public"));
+
+app.get("/ss", (req, res) => {
+  console.log("hey mobile user");
+  res.send("hey mobile user");
+});
+console.log("hello");
 
 server.listen(port, function () {
   console.log(`Server is running on port ${port}`);

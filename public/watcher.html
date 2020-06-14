@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Stream</title>
+    <title>Watcher</title>
     <style>
       body {
-        background-color: #3d6df2;
+        background-color: #ff0945;
         margin-top: 15px;
       }
       video {
@@ -27,7 +27,7 @@
         top: 15px;
         right: 15px;
       }
-      #theirVideo {
+      #streamerVideo {
         width: 650px;
         height: 650px;
       }
@@ -35,14 +35,14 @@
   </head>
   <body>
     <p id="statusText">Nothing</p>
-    <button id="startCall">Start Call</button>
-    <button id="endCall">End Call</button>
+    <button id="acceptCall" disabled>Accept Start</button>
+    <button id="endCall">End Connection</button>
     <div class="container">
       <video id="selfVideo" autoplay></video>
-      <video id="theirVideo" autoplay></video>
+      <video id="streamerVideo" autoplay></video>
     </div>
     <p id="showError"></p>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="app.js"></script>
+    <script src="watcher.js"></script>
   </body>
 </html>
