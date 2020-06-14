@@ -31,7 +31,7 @@ IO.on("connection", (socket) => {
     socket.to(id).emit("accpetCall", socket.id);
   });
   socket.on("offer", (id, desc) => {
-    console.log(desc);
+    console.log("offer", desc);
     socket.to(id).emit("offer", socket.id, desc);
   });
   socket.on("answer", (id, message) => {
