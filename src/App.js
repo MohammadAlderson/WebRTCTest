@@ -28,7 +28,8 @@ class App extends React.PureComponent {
 
   componentDidMount() {
     console.log("window url:", window.location.origin);
-    this.socket = io.connect("http://localhost:8080");
+	let url = window.location.origin
+    this.socket = io.connect(url);
     console.log("this.socket", this.socket);
 
     this.socket.on("success-connection", (success) => {
