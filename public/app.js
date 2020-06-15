@@ -1,110 +1,113 @@
-let socket = io.connect(window.location.origin);
-console.log(window.location.origin);
-let mediaDevices = navigator.mediaDevices;
-let yourConnection, theirConnection;
-let statusText = document.querySelector("#statusText");
-let endCall = document.querySelector("#endCall");
-let startCallBtn = document.querySelector("#startCall");
+const socket = io.connect(window.location.origin);
+let myId, sdpValue;
+socket.on("successFull-connected", (id) => {
+  myId = id;
+});
+
+let remoteStream, localStream;
+
 let selfVideo = document.querySelector("#selfVideo");
-let theirVideo = document.querySelector("#theirVideo");
-let isFront = false;
-let facingMode = isFront ? "user" : "environment";
-let streamVal;
-let constraints = {
-  video: {
-    facingMode,
-    width: 150,
-    height: 200,
-    frameRate: 60,
-  },
-  audio: false,
-}; // This parameter expects an object of keys and values telling the browser how to look for and process streams coming from the connected devices
-let config = {
-  iceServers: [{ url: "stun:stun.1.google.com:19302" }],
+let remoteVideo = document.querySelector("#theirVideo");
+let statusText = document.querySelector("#statusText");
+let startCallBtn = document.querySelector("#startCall");
+let accpetCallBtn = document.querySelector("#accpetCall");
+accpetCallBtn.disabled = true;
+
+let constraints = { audio: false, video: true };
+
+const pc_config = {
+  iceServers: [
+    {
+      urls: "stun:stun.l.google.com:19302",
+    },
+  ],
 };
 
-let peerConnection;
-let peerID;
-let peerConnections = {};
+navigator.mediaDevices
+  .getUserMedia(constraints)
+  .then((stream) => {
+    selfVideo.srcObject = stream;
+    localStream = stream;
+    stream.getTracks().forEach((track) => {
+      // console.log(track);
+      peerConnection.addTrack(track, localStream);
+    });
+  })
+  .catch((e) => console.log(e));
 
-startCallBtn.onclick = function () {
-  startCall();
-  statusText.innerHTML = "Calling...";
+// console.log(localStream);
+
+const peerConnection = new RTCPeerConnection(pc_config);
+
+peerConnection.onicecandidate = (event) => {
+  if (event.candidate) {
+    socket.emit("candidate", myId, event.candidate);
+  }
 };
 
-socket.on("accpetCall", function (id) {
-  peerConnection = new RTCPeerConnection(config);
-  peerConnections[id] = peerConnection;
+peerConnection.ontrack = (event) => {
+  remoteVideo.srcObject = event.streams[0];
+};
 
-  console.log("call accepted by: ", id);
-  statusText.innerHTML = "******* Call accepted *******";
+// peerConnection.ontrack = (e) => {
+//   remoteStream = e.streams[0];
+// };
 
-  streamVal.getTracks().forEach((track) => {
-    console.log(track);
-    peerConnection.addTrack(track, streamVal);
-  });
-  peerConnection.ontrack = (event) => {
-    console.log(event.streams[0]);
-    console.log(event.streams);
+peerConnection.oniceconnectionstatechange = (e) => {
+  console.log("oniceconnectionstatechange", e);
+};
 
-    theirVideo.srcObject = event.streams[0];
-  };
+function createOffer() {
   peerConnection
     .createOffer()
-    .then(function (offer) {
-      console.log("offer", offer);
-      peerConnection.setLocalDescription(offer);
+    .then((sdp) => {
+      sdpValue = sdp;
+      peerConnection.setLocalDescription(sdp);
     })
     .then(function () {
-      socket.emit("offer", id, peerConnection.localDescription);
+      console.log("creating offer");
+      statusText.innerHTML = "Calling...";
+      socket.emit("offer", myId, sdpValue);
+      accpetCallBtn.disabled = true;
     })
-    .catch(function (e) {
-      console.log(e);
-    });
-
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate) {
-      socket.emit("candidate", socket.id, event.candidate);
-    }
-  };
-});
-
-socket.on("answer", (id, description) => {
-  console.log(peerConnections);
-  peerConnections[id].setRemoteDescription(description);
-});
-
-socket.on("candidate", (id, candidate) => {
-  peerConnections[id].addIceCandidate(new RTCIceCandidate(candidate));
-});
-
-mediaDevices.enumerateDevices().then(function (devices) {
-  let videoSource = null;
-  let audioSource = null;
-  devices.forEach(function (device) {
-    if (device.kind === "audioinput") {
-      audioSource = device.deviceId;
-    } else if (device.kind === "videoinput") {
-      videoSource = device.deviceId;
-    }
-  });
-  constraints.video = {
-    ...constraints.video,
-    deviceId: videoSource,
-  };
-  constraints.audio = {
-    ...constraints.audio,
-    deviceId: audioSource,
-  };
-});
-
-mediaDevices.getUserMedia(constraints).then(function (stream) {
-  selfVideo.srcObject = stream;
-  streamVal = stream;
-  console.log("streamVal:", streamVal);
-});
-
-function startCall() {
-  socket.emit("requestCall", socket.id);
-  console.log(socket.id);
+    .catch((e) => console.log(e));
 }
+
+function createAnwer() {
+  peerConnection
+    .createAnswer()
+    .then((sdp) => {
+      sdpValue = sdp;
+      return peerConnection.setLocalDescription(sdp);
+    })
+    .then(function () {
+      socket.emit("answer", myId, sdpValue);
+    })
+    .catch((e) => console.log(e));
+}
+
+socket.on("offer", (sdp) => {
+  console.log("on offer");
+  statusText.innerHTML = "Some one is Calling!";
+  startCallBtn.disabled = true;
+  accpetCallBtn.disabled = false;
+  peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+});
+
+socket.on("answer", (sdp) => {
+  console.log("on answer");
+  statusText.innerHTML = "User Answered";
+  peerConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+});
+
+socket.on("candidate", (candidate) => {
+  peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+});
+
+startCallBtn.onclick = function () {
+  createOffer();
+};
+
+accpetCallBtn.onclick = function () {
+  createAnwer();
+};
