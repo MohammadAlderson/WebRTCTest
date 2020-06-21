@@ -1,0 +1,296 @@
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  TouchableOpacity,
+  ActivityIndicator,
+} from 'react-native';
+import {
+  RTCPeerConnection,
+  RTCSessionDescription,
+  RTCIceCandidate,
+  RTCView,
+  mediaDevices,
+} from 'react-native-webrtc';
+import io from 'socket.io-client';
+
+const screenWidth = Dimensions.get('window').width;
+const screenHeight = Dimensions.get('window').height;
+const pc_config = {
+  iceServers: [
+    {
+      urls: 'stun:stun.l.google.com:19302',
+    },
+  ],
+};
+class VideoCall extends React.Component {
+  constructor(props) {
+    super(props);
+
+    this.state = {
+      localStream: null,
+      remoteStream: null,
+      loader: false,
+      myId: null,
+      callBtnStatus: true,
+      answerBtnStatus: false,
+    };
+    this.sdp;
+    this.socket = null;
+  }
+
+  handleSocketConnect = () => {
+    // // let url = 'https://rn-web-rtc-test.herokuapp.com/';
+    // let url = 'http://192.168.43.92:8080';
+    this.socket = io.connect(this.props.serverUrl);
+    return this.socket;
+  };
+
+  componentDidMount = () => {
+    let isFront = true;
+    mediaDevices.enumerateDevices().then(sourceInfos => {
+      // console.log(sourceInfos);
+      let videoSourceId;
+      for (let i = 0; i < sourceInfos.length; i++) {
+        const sourceInfo = sourceInfos[i];
+        if (
+          sourceInfo.kind == 'videoinput' &&
+          sourceInfo.facing == (isFront ? 'front' : 'environment')
+        ) {
+          videoSourceId = sourceInfo.deviceId;
+        }
+      }
+      const constraints = {
+        audio: true,
+        video: {
+          mandatory: {
+            minWidth: 500, // Provide your own width, height and frame rate here
+            minHeight: 300,
+            minFrameRate: 30,
+          },
+          facingMode: isFront ? 'user' : 'environment',
+          optional: videoSourceId ? [{sourceId: videoSourceId}] : [],
+        },
+      };
+      mediaDevices
+        .getUserMedia(constraints)
+        .then(success)
+        .catch(failure);
+    });
+    const success = stream => {
+      console.log('stream', stream);
+      // console.log(stream.toURL());
+      this.setState({
+        localStream: stream,
+      });
+      this.pc.addStream(stream);
+      // stream._tracks.forEach(track => {
+      //   // console.log(track);
+      //   console.log('this.pc', this.pc);
+      //   this.pc.addTrack(track, stream);
+      // });
+    };
+
+    const failure = e => {
+      console.log('getUserMedia Error: ', e);
+    };
+    this.handleCall();
+  };
+
+  handleCall = () => {
+    const socket = this.handleSocketConnect();
+    this.socket.on('successFull-connected', id => {
+      console.log('successFull-connected');
+      this.setState({myId: id});
+    });
+    this.pc = new RTCPeerConnection(pc_config);
+
+    this.pc.onaddstream = e => {
+      console.log('onaddStream', e)
+      if (e.stream) {
+        this.setState({loader: true});
+
+        setTimeout(() => {
+          this.setState({
+            remoteStream: e.stream,
+            loader: false,
+          });
+        }, 3000);
+      }
+    };
+
+    this.pc.onicecandidate = e => {
+      if (e.candidate) {
+        this.socket.emit('candidate', this.state.myId, e.candidate);
+      }
+    };
+
+    // this.pc.oniceconnectionstatechange = e => {
+    //   console.log(e);
+    // };
+
+    socket.on('candidate', candidate => {
+      this.pc
+        .addIceCandidate(new RTCIceCandidate(candidate))
+        .catch(e => console.error(e));
+    });
+
+    socket.on('offer', sdp => {
+      console.log('ON Offer');
+      this.setState({answerBtnStatus: true, callBtnStatus: false});
+      this.pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    });
+
+    socket.on('answer', sdp => {
+      console.log('ON Answer');
+      this.pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    });
+  };
+
+  createOffer = () => {
+    console.log('Offer');
+    this.pc
+      .createOffer()
+      .then(sdp => {
+        this.sdp = sdp;
+        return this.pc.setLocalDescription(sdp);
+      })
+      .then(() => {
+        this.socket.emit('offer', this.state.myId, this.sdp);
+      });
+  };
+
+  createAnswer = () => {
+    console.log('Answer');
+    this.pc
+      .createAnswer()
+      .then(sdp => {
+        this.sdp = sdp;
+        return this.pc.setLocalDescription(sdp);
+      })
+      .then(() => {
+        this.socket.emit('answer', this.state.myId, this.sdp);
+      });
+  };
+  componentWillUnmount() {
+    this.socket.disconnect();
+    if (this.pc) {
+      this.pc.close();
+    }
+    // this.state.peerConnection.close();
+  }
+
+  render() {
+    return (
+      <View style={{flex: 1}}>
+        <View style={{flexDirection: 'row'}}>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              margin: 5,
+              backgroundColor: this.state.callBtnStatus ? '#ee6c6c' : '#bebebe',
+              height: 50,
+              borderRadius: 8,
+            }}
+            onPress={() => {
+              if (this.state.callBtnStatus) {
+                this.setState({callBtnStatus: false, answerBtnStatus: false});
+                this.createOffer();
+              }
+            }}>
+            <Text style={{color: this.state.callBtnStatus ? '#000' : '#fff'}}>
+              Call
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              margin: 5,
+              backgroundColor: this.state.answerBtnStatus
+                ? '#ee6c6c'
+                : '#bebebe',
+              height: 50,
+              borderRadius: 8,
+            }}
+            onPress={() => {
+              if (this.state.answerBtnStatus) {
+                this.setState({callBtnStatus: false, answerBtnStatus: false});
+                this.createAnswer();
+              }
+            }}>
+            <Text style={{color: this.state.answerBtnStatus ? '#000' : '#fff'}}>
+              Answer
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View
+          style={{
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: '#1329a5',
+            flex: 1,
+          }}>
+          {this.state.loader ? (
+            <ActivityIndicator size="large" color="#fff" />
+          ) : (
+            this.state.remoteStream && (
+              <RTCView
+                streamURL={this.state.remoteStream.toURL()}
+                objectFit={'cover'}
+                zOrder={1}
+                style={styles.remoteStreamView}
+              />
+            )
+          )}
+        </View>
+
+        <View
+          style={{
+            justifyContent: 'center',
+            alignItems: 'center',
+            width: 120,
+            height: 180,
+            backgroundColor: '#bf2323',
+            position: 'absolute',
+            right: 0,
+            bottom: 0,
+          }}>
+          {this.state.localStream && (
+            <RTCView
+              streamURL={this.state.localStream.toURL()}
+              objectFit={'cover'}
+              zOrder={2}
+              style={styles.localStreamView}
+            />
+          )}
+        </View>
+      </View>
+    );
+  }
+}
+const styles = StyleSheet.create({
+  fullScreen: {
+    // position: 'absolute',
+    // top: 0,
+    // left: 0,
+    width: screenWidth,
+    height: screenHeight,
+  },
+  localStreamView: {
+    width: '90%',
+    height: '90%',
+  },
+  remoteStreamView: {
+    width: '90%',
+    height: '90%',
+  },
+});
+
+export default VideoCall;
