@@ -50,6 +50,16 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on("offerOrAnswer", (userId, data) => {
+    users.forEach((connectedUserId) => {
+      if (userId !== connectedUserId) {
+        console.log(`user with id: ${userId} offerOrAnswer!`);
+        console.log("destination: ", connectedUserId);
+        io.to(connectedUserId).emit("offerOrAnswer", data);
+      }
+    });
+  });
+
   socket.on("disconnect", () => {
     users.pop(socket.id);
     console.log(`User Disconnected! Socket Id : ${socket.id}`);
